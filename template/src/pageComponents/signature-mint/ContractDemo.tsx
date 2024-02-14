@@ -26,11 +26,11 @@ export default function SignatureMintDemo() {
   const explorerLink = useBlockExplorerLink(chain as Chain, contractAddress);
   const [usedFreeMint, setUsedFreeMint] = useState(false);
 
-  const { collectionName, imageAddress, isLoading } = useCollectionMetadata(
-    onCorrectNetwork,
-    contractAddress,
-    contract.abi,
-  );
+  const {
+    collectionName,
+    imageAddress,
+    status: collectionMetadataStatus,
+  } = useCollectionMetadata(onCorrectNetwork, contractAddress, contract.abi);
 
   /**
    * Call the API backend to get a signature
@@ -110,9 +110,13 @@ export default function SignatureMintDemo() {
     return <SwitchNetwork />;
   }
 
-  if (isLoading) {
+  if (collectionMetadataStatus === 'loading') {
     // A future enhancement would be a nicer spinner here.
     return <span className="text-xl">loading...</span>;
+  }
+
+  if (collectionMetadataStatus === 'error') {
+    return <span className="text-xl">Error while fetching metadata</span>;
   }
 
   return (

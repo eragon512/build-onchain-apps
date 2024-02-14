@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { Chain } from 'viem/chains';
 
 export enum HashType {
@@ -16,14 +15,10 @@ export function useBlockExplorerLink(
   hash: string | undefined,
   type: HashType = HashType.Address,
 ) {
-  const [link, setLink] = useState('');
+  if (chain?.blockExplorers && hash) {
+    const explorerUrl = chain.blockExplorers?.default.url;
+    return `${explorerUrl}/${type.toString()}/${hash}`;
+  }
 
-  useEffect(() => {
-    if (chain?.blockExplorers && hash) {
-      const explorerUrl = chain.blockExplorers?.default.url;
-      setLink(`${explorerUrl}/${type.toString()}/${hash}`);
-    }
-  }, [chain, hash, type]);
-
-  return link;
+  return '';
 }

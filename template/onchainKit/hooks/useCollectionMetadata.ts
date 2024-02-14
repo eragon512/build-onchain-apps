@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Abi, Address } from 'abitype';
 import { useReadContract } from 'wagmi';
 import { ipfsToHTTP } from '../core/ipfs';
@@ -10,20 +10,26 @@ enum UriFunctionType {
   uri = 'uri',
   contractURI = 'contractURI',
 }
-// A future enhancement would be to track error state from the contract read
-// and the fetch so that we can gracefully surface issues to users.
+
 type CollectionMetadataResult =
   | {
       collectionName: null;
       description: null;
       imageAddress: null;
-      isLoading: true;
+      status: 'loading';
+    }
+  | {
+      collectionName: null;
+      description: null;
+      imageAddress: null;
+      error: Error;
+      status: 'error';
     }
   | {
       collectionName: string;
       description: string;
       imageAddress: string;
-      isLoading: false;
+      status: 'success';
     };
 
 type JsonMetadata = {
@@ -39,10 +45,35 @@ function tryParseMetadataJson(str: string): CollectionMetadataResult | undefined
       collectionName: json.name,
       description: json.description,
       imageAddress: ipfsToHTTP(json.image),
-      isLoading: false,
+      status: 'success',
     } as CollectionMetadataResult;
-  } catch (err) {}
-  return;
+  } catch (err) {
+    return {
+      error: err,
+      status: 'error',
+    } as CollectionMetadataResult;
+  }
+}
+
+async function fetchCollectionMetadata(contractURI: unknown): Promise<CollectionMetadataResult> {
+  /**
+   * Contract URIs can either be hosted externally (e.g. IPFS) or stored as data within the contract itself as json.
+   * While this is not defined in https://datatracker.ietf.org/doc/html/rfc3986#section-1.1.2 it is a common
+   * practice out in the wild.
+   */
+  const jsonParsedMetadata = tryParseMetadataJson(contractURI as string);
+  if (jsonParsedMetadata) {
+    return jsonParsedMetadata;
+  } else {
+    const response = await fetch(contractURI as URL);
+    const json = (await response.json()) as { name: string; description: string; image: string };
+    return {
+      collectionName: json.name,
+      description: json.description,
+      imageAddress: ipfsToHTTP(json.image),
+      status: 'success',
+    };
+  }
 }
 
 /**
@@ -58,7 +89,7 @@ export function useCollectionMetadata(enabled: boolean, address: Address | undef
     collectionName: null,
     description: null,
     imageAddress: null,
-    isLoading: true,
+    status: 'loading',
   });
   let lookupType: UriFunctionType;
   //TODO: kinds of a hack, is there a more prescriptive way we can do this lookup?
@@ -80,36 +111,31 @@ export function useCollectionMetadata(enabled: boolean, address: Address | undef
       enabled,
     },
   });
-  const fetchCollectionMetadata = useCallback(async () => {
-    if (!contractURI) {
-      return;
-    }
-
-    /**
-     * Contract URIs can either be hosted externally (e.g. IPFS) or stored as data within the contract itself as json.
-     * While this is not defined in https://datatracker.ietf.org/doc/html/rfc3986#section-1.1.2 it is a common
-     * practice out in the wild.
-     */
-    const jsonParsedMetadata = tryParseMetadataJson(contractURI as string);
-    if (jsonParsedMetadata) {
-      setResult(jsonParsedMetadata);
-    } else {
-      const response = await fetch(contractURI as URL);
-      const json = (await response.json()) as { name: string; description: string; image: string };
-      setResult({
-        collectionName: json.name,
-        description: json.description,
-        imageAddress: ipfsToHTTP(json.image),
-        isLoading: false,
-      });
-    }
-  }, [contractURI]);
 
   useEffect(() => {
     if (contractURI) {
-      void fetchCollectionMetadata();
+      fetchCollectionMetadata(contractURI)
+        .then((res) => setResult(res))
+        .catch((err: Error) => {
+          console.error(err);
+          setResult({
+            collectionName: null,
+            description: null,
+            imageAddress: null,
+            error: err,
+            status: 'error',
+          });
+        });
+    } else {
+      setResult({
+        collectionName: null,
+        description: null,
+        imageAddress: null,
+        error: new Error('useCollectionMetadata: No contractURI found'),
+        status: 'error',
+      });
     }
-  }, [contractURI, fetchCollectionMetadata]);
+  }, [contractURI]);
 
   return result;
 }

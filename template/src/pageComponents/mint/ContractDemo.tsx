@@ -30,7 +30,7 @@ export default function MintContractDemo() {
     collectionName,
     description,
     imageAddress,
-    isLoading: isLoadingCollectionMetadata,
+    status: collectionMetadataStatus,
   } = useCollectionMetadata(
     onCorrectNetwork,
     contract.status === 'ready' ? contract.address : undefined,
@@ -72,7 +72,7 @@ export default function MintContractDemo() {
     return <SwitchNetwork />;
   }
 
-  if (isLoadingCollectionMetadata || contract.status !== 'ready') {
+  if (collectionMetadataStatus === 'loading' || contract.status !== 'ready') {
     return (
       <div className="my-5 flex justify-center align-middle">
         <span className="text-xl">
@@ -81,6 +81,13 @@ export default function MintContractDemo() {
       </div>
     );
   }
+
+  if (collectionMetadataStatus === 'error') {
+    return <span className="text-xl">Error while fetching metadata</span>;
+  }
+
+  // TODO: Retrieve this dynamically
+  const ethAmount = 0.0001;
 
   return (
     <div className="my-10 gap-16 lg:my-20 lg:flex">
